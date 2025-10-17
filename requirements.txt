@@ -3,3 +3,5 @@ opencv-python
 numpy
 scikit-learn
 yt-dlp
+pyttsx3
+pypiwin32

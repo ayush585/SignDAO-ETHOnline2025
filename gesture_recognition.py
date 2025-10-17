@@ -9,6 +9,88 @@ import mediapipe as mp
 import numpy as np
 from sklearn.neighbors import KNeighborsClassifier
 
+# ---- Accessibility Voice Feedback (single source of truth) ----
+import time
+import threading
+import queue
+import pyttsx3
+
+# Threaded, non-blocking TTS
+_tts_engine = pyttsx3.init()  # Windows: SAPI5
+_tts_queue = queue.Queue()
+
+
+def _tts_worker():
+    while True:
+        msg = _tts_queue.get()
+        if msg is None:
+            break
+        try:
+            _tts_engine.say(msg)
+            _tts_engine.runAndWait()
+        except Exception as e:
+            print(f"[TTS error] {e}")
+        finally:
+            _tts_queue.task_done()
+
+
+_tts_thread = threading.Thread(target=_tts_worker, daemon=True)
+_tts_thread.start()
+
+# Global TTS cooldown to avoid spam of same message
+_last_spoken = None
+_last_spoken_at = 0.0
+_COOLDOWN_SEC = 1.5  # generic cooldown for identical messages
+
+
+def speak_once(message: str):
+    """Queue a TTS message with a generic cooldown to prevent spam."""
+    global _last_spoken, _last_spoken_at
+    now = time.time()
+    if message != _last_spoken or (now - _last_spoken_at) > _COOLDOWN_SEC:
+        try:
+            _tts_queue.put(message)
+            _last_spoken = message
+            _last_spoken_at = now
+        except Exception as e:
+            print(f"[TTS queue error] {e}")
+
+
+# ---- Gesture label normalization + edge/cooldown tracking ----
+_prev_pred = "NONE"
+_last_yes_at = 0.0
+_last_no_at = 0.0
+_COOLDOWN_YES = 1.5
+_COOLDOWN_NO = 1.5
+
+
+def canonicalize_label(label) -> str:
+    """
+    Map model/heuristic labels to canonical 'YES'/'NO'/'NONE'.
+    Handles casing/whitespace and common synonyms like 'THUMB_UP', 'OPEN_HAND'.
+    """
+    if label is None:
+        return "NONE"
+    s = str(label).strip().upper()
+
+    # Common YES variants
+    YES_SET = {"YES", "THUMB_UP", "THUMBS_UP", "UP", "APPROVE", "LIKE"}
+    # Common NO variants
+    NO_SET = {"NO", "OPEN_HAND", "PALM", "STOP", "DISLIKE", "DOWN", "THUMB_DOWN", "THUMBS_DOWN"}
+
+    if s in YES_SET:
+        return "YES"
+    if s in NO_SET:
+        return "NO"
+
+    # If you have fused_label like "YES (0.91)" elsewhere, strip trailing confidence:
+    if "YES" in s:
+        return "YES"
+    if "NO" in s:
+        return "NO"
+
+    return "NONE"
+
 UNKNOWN_FLOOR = 0.55
 ML_TAKEOVER = 0.60
 SMOOTH_WINDOW = 9
@@ -143,6 +225,7 @@ if ml_clf is None:
 
 
 def main():
+    global _prev_pred, _last_yes_at, _last_no_at
     mp_hands = mp.solutions.hands
     history: deque[tuple[str, float]] = deque(maxlen=SMOOTH_WINDOW)
     last_label_conf: tuple[str, float] | None = None
@@ -210,6 +293,26 @@ def main():
                     else:
                         display_text = f"{fused_label} ({fused_conf:.2f})"
 
+                    prediction = fused_label
+                    pred_norm = canonicalize_label(prediction)
+                    now = time.time()
+
+                    # YES feedback: on edge into YES or after YES cooldown while holding
+                    if pred_norm == "YES" and (_prev_pred != "YES" or (now - _last_yes_at) > _COOLDOWN_YES):
+                        speak_once("Vote YES submitted")
+                        _last_yes_at = now
+
+                    # NO feedback: on edge into NO or after NO cooldown while holding
+                    elif pred_norm == "NO" and (_prev_pred != "NO" or (now - _last_no_at) > _COOLDOWN_NO):
+                        speak_once("Vote NO submitted")
+                        _last_no_at = now
+
+                    # Reset previous when no hand is detected so next entry fires
+                    elif pred_norm == "NONE":
+                        _prev_pred = "NONE"
+
+                    _prev_pred = pred_norm
+
                     cv2.putText(
                         enhanced_frame,
                         display_text,
@@ -239,6 +342,8 @@ def main():
                         }
                         print(json.dumps(payload), flush=True)
                         last_label_conf = ("NONE", 0.0)
+                    prediction = "NONE"
+                    _prev_pred = "NONE"
 
                 cv2.imshow("SignDAO Gesture", enhanced_frame)
                 if cv2.waitKey(1) & 0xFF == ord("q"):
