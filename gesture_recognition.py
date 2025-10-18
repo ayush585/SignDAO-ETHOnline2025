@@ -257,6 +257,10 @@ def main():
 
                 if results.multi_hand_landmarks:
                     landmarks = results.multi_hand_landmarks[0].landmark
+                    # ---- NFT prototype metadata logging ----
+                    landmark_x_values = [float(lm.x) for lm in landmarks]
+                    nft_metadata = {"nft_metadata": {"landmarks": landmark_x_values}}
+                    print(json.dumps(nft_metadata), flush=True)
                     landmark_matrix = landmark_array(landmarks)
                     handedness = None
                     if results.multi_handedness:
