@@ -18,3 +18,13 @@ Enables inclusive Web3 for 1B+ underserved users.
 ### Contracts (Sepolia)
 - DaoActions.sol @ `0x1Fdf28577154106956cfE5086a7d7B17b6Da4C1b` (verified)
 - GestureNFT.sol @ `0x8Ec061e0aF8A430eF1056ed377eDeAfB1cFE21cF` (verified)
+
+### ZK Privacy (Semaphore – Local Dev)
+- Run Hardhat local chain:
+  yarn workspace monorepo-ethers-contracts hardhat node
+- In another terminal, start the web app:
+  yarn workspace monorepo-ethers-web-app dev
+- MetaMask → Add network:
+  RPC https://127.0.0.1:8545  | Chain ID 31337 | Name Localhost 8545
+- Import test account (from Hardhat logs) and open http://localhost:3000
+  Create Identity → Join Group → Proofs → Send Feedback (zk proof).
