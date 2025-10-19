@@ -18,7 +18,8 @@ Enables inclusive Web3 for 1B+ underserved users.
 ### Contracts (Sepolia)
 - DaoActions.sol @ `0x1Fdf28577154106956cfE5086a7d7B17b6Da4C1b` (verified)
 - GestureNFT.sol @ `0x8Ec061e0aF8A430eF1056ed377eDeAfB1cFE21cF` (verified)
-- ZK Verifier (TBD) → @ [to be filled after deploy]
+- ZK Verifier: 0x10d37E4cc006C49a05e3D5919519E25b6DdD2aEf (tx:0x20f9be9f2f2628a25f70d4e83b85a1d9d9533ef7c0f4599051c3f47305d90022)
+
 
 ### ZK Privacy (Semaphore – Local Dev)
 - Run Hardhat local chain:

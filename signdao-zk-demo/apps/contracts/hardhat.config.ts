@@ -1,36 +1,22 @@
-import "@nomicfoundation/hardhat-toolbox"
-import "@semaphore-protocol/hardhat"
-import { getHardhatNetworks } from "@semaphore-protocol/utils"
-import { config as dotenvConfig } from "dotenv"
-import { HardhatUserConfig } from "hardhat/config"
-import { resolve } from "path"
-import "./tasks/deploy"
+import * as dotenv from "dotenv";
+dotenv.config();
 
-dotenvConfig({ path: resolve(__dirname, "../../.env") })
+import "@nomicfoundation/hardhat-toolbox";
+
+import { HardhatUserConfig } from "hardhat/config";
+
+const rawPk = process.env.ETHEREUM_PRIVATE_KEY ?? "";
+const pk = rawPk.startsWith("0x") ? rawPk : rawPk ? `0x${rawPk}` : "";
 
 const config: HardhatUserConfig = {
     solidity: "0.8.23",
-    defaultNetwork: process.env.DEFAULT_NETWORK || "hardhat",
     networks: {
-        hardhat: {
-            chainId: 1337
-        },
-        ...getHardhatNetworks(process.env.ETHEREUM_PRIVATE_KEY)
-    },
-    gasReporter: {
-        currency: "USD",
-        enabled: process.env.REPORT_GAS === "true",
-        coinmarketcap: process.env.COINMARKETCAP_API_KEY
-    },
-    typechain: {
-        target: "ethers-v6"
-    },
-    etherscan: {
-        apiKey: process.env.ETHERSCAN_API_KEY
-    },
-    sourcify: {
-        enabled: true
+        sepolia: {
+            url: process.env.SEPOLIA_RPC_URL,
+            accounts: pk ? [pk] : [],
+            chainId: 11155111
+        }
     }
-}
+};
 
-export default config
+export default config;
