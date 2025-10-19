@@ -14,3 +14,7 @@ SignDAO uses AI to translate sign language gestures into on-chain votes, with ZK
 
 ## Impact
 Enables inclusive Web3 for 1B+ underserved users.
+
+### Contracts (Sepolia)
+- DaoActions.sol @ `0x1Fdf28577154106956cfE5086a7d7B17b6Da4C1b` (verified)
+- GestureNFT.sol @ `0x8Ec061e0aF8A430eF1056ed377eDeAfB1cFE21cF` (verified)
