@@ -21,6 +21,9 @@ Enables inclusive Web3 for 1B+ underserved users.
 - ZK Verifier: 0x10d37E4cc006C49a05e3D5919519E25b6DdD2aEf (tx:0x20f9be9f2f2628a25f70d4e83b85a1d9d9533ef7c0f4599051c3f47305d90022)
 - DaoActions: 0xa697B278ad81aeFC24D85ADE99828BFf8758cE60
   (verified on Sourcify & Routescan)
+| **DaoActionsZK.sol** | [`0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2`](https://testnet.routescan.io/address/0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2/contract/11155111/code) | Sepolia | Main DAO logic + ZK vote verification | ✅ Sourcify + Routescan |
+| **SemaphoreVerifier.sol** | [`0x185112CB3C2140858ff77C5B33F11Be8343ae3fc`](https://testnet.routescan.io/address/0x185112CB3C2140858ff77C5B33F11Be8343ae3fc/contract/11155111/code) | Sepolia | Groth16 Proof Verifier | ✅ Sourcify + Routescan |
+| **DaoActionsCore.sol** | Local | Hardhat | Staking + Proposal actions | 🧩 Core module |
 
 
 ### ZK Privacy (Semaphore – Local Dev)

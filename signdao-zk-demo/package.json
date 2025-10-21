@@ -24,6 +24,15 @@
   ],
   "packageManager": "yarn@4.1.0",
   "devDependencies": {
-    "prettier": "^3.2.5"
+    "prettier": "^3.2.5",
+    "snarkjs": "^0.7.5"
+  },
+  "dependencies": {
+    "@semaphore-protocol/circuits": "4.13.2",
+    "@semaphore-protocol/group": "^4",
+    "@semaphore-protocol/identity": "^4",
+    "@semaphore-protocol/proof": "^4",
+    "ethers": "^6.15.0",
+    "node-fetch": "^3.3.2"
   }
 }
