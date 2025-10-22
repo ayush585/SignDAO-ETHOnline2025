@@ -10,12 +10,61 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import Feedback from "../../../contract-artifacts/Feedback.json"
 import useSemaphoreIdentity from "@/hooks/useSemaphoreIdentity"
 
+type GesturePayload = {
+    gesture: string
+    confidence: number
+}
+
 export default function ProofsPage() {
     const router = useRouter()
     const { setLog } = useLogContext()
     const { _users, _feedback, refreshFeedback, addFeedback } = useSemaphoreContext()
     const [_loading, setLoading] = useState(false)
     const { _identity } = useSemaphoreIdentity()
+    const [gesture, setGesture] = useState<string>("")
+    const [confidence, setConfidence] = useState<number | null>(null)
+    const [error, setError] = useState<string>("")
+
+    useEffect(() => {
+        let mounted = true
+
+        const tick = () => {
+            fetch("http://localhost:5000/gesture")
+                .then((response) => {
+                    if (!response.ok) {
+                        throw new Error("Bad response")
+                    }
+
+                    return response.json()
+                })
+                .then((data: GesturePayload) => {
+                    if (!mounted) {
+                        return
+                    }
+
+                    setGesture(data?.gesture ?? "")
+                    setConfidence(typeof data?.confidence === "number" ? data.confidence : null)
+                    setError("")
+                })
+                .catch(() => {
+                    if (!mounted) {
+                        return
+                    }
+
+                    setGesture("")
+                    setConfidence(null)
+                    setError("API unreachable")
+                })
+        }
+
+        tick()
+        const id = setInterval(tick, 1500)
+
+        return () => {
+            mounted = false
+            clearInterval(id)
+        }
+    }, [])
 
     useEffect(() => {
         if (_feedback.length > 0) {
@@ -124,6 +173,17 @@ export default function ProofsPage() {
 
     return (
         <>
+            <section className="gesture-vote">
+                <h2>Gesture Vote</h2>
+                <p>Gesture: {gesture ? gesture : "Waiting..."}</p>
+                <p>Confidence: {confidence !== null ? confidence.toFixed(2) : "-"}</p>
+                {error && (
+                    <p style={{ color: "red", fontSize: "0.85rem" }} role="alert">
+                        {error}
+                    </p>
+                )}
+            </section>
+
             <h2>Proofs</h2>
 
             <p>

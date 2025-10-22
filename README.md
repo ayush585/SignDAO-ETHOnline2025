@@ -16,6 +16,9 @@ SignDAO uses AI to translate sign language gestures into on-chain votes, with ZK
 Enables inclusive Web3 for 1B+ underserved users.
 
 ### Contracts (Sepolia)
+
+- Semaphore Verifier @ `0x1851...3fc` (Tx: `0xd009...610f`)
+- DaoActionsZK @ `0x7b83...73f2` (Tx: `0x0e4d...7b72`)
 - DaoActions.sol @ `0x1Fdf28577154106956cfE5086a7d7B17b6Da4C1b` (verified)
 - GestureNFT.sol @ `0x8Ec061e0aF8A430eF1056ed377eDeAfB1cFE21cF` (verified)
 - ZK Verifier: 0x10d37E4cc006C49a05e3D5919519E25b6DdD2aEf (tx:0x20f9be9f2f2628a25f70d4e83b85a1d9d9533ef7c0f4599051c3f47305d90022)
@@ -35,3 +38,20 @@ Enables inclusive Web3 for 1B+ underserved users.
   RPC https://127.0.0.1:8545  | Chain ID 31337 | Name Localhost 8545
 - Import test account (from Hardhat logs) and open http://localhost:3000
   Create Identity → Join Group → Proofs → Send Feedback (zk proof).
+
+### Local Dev: Gesture Bridge
+Backend:
+```bash
+cd apps/backend
+pip install -r requirements.txt
+python api.py
+```
+Visit http://localhost:5000/gesture.
+
+Frontend:
+```bash
+cd signdao-zk-demo/apps/web-app
+npm install
+npm run dev
+```
+Visit http://localhost:3000/proofs.
