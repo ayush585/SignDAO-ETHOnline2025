@@ -4,10 +4,12 @@ import Stepper from "@/components/Stepper"
 import { useLogContext } from "@/context/LogContext"
 import { useSemaphoreContext } from "@/context/SemaphoreContext"
 import { generateProof, Group } from "@semaphore-protocol/core"
-import { encodeBytes32String, ethers } from "ethers"
+import { unpackGroth16Proof } from "@zk-kit/utils/proof-packing"
+import { encodeBytes32String, ethers, keccak256, toBeHex } from "ethers"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Feedback from "../../../contract-artifacts/Feedback.json"
+import DaoActionsZK from "../../../contract-artifacts/DaoActionsZK.json"
 import useSemaphoreIdentity from "@/hooks/useSemaphoreIdentity"
 
 type GesturePayload = {
@@ -24,6 +26,16 @@ export default function ProofsPage() {
     const [gesture, setGesture] = useState<string>("")
     const [confidence, setConfidence] = useState<number | null>(null)
     const [error, setError] = useState<string>("")
+    const lastGesture = useRef<string>("")
+    const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    useEffect(() => {
+        return () => {
+            if (cooldownRef.current) {
+                clearTimeout(cooldownRef.current)
+            }
+        }
+    }, [])
 
     useEffect(() => {
         let mounted = true
@@ -170,6 +182,98 @@ export default function ProofsPage() {
             }
         }
     }, [_identity, _users, addFeedback, setLoading, setLog])
+
+    useEffect(() => {
+        const isVoteGesture = gesture === "YES" || gesture === "NO"
+        if (!isVoteGesture || gesture === lastGesture.current) {
+            return
+        }
+
+        if (!_identity) {
+            setLog("Semaphore identity not ready yet.")
+            return
+        }
+
+        if (!_users || _users.length === 0) {
+            setLog("No Semaphore members found for proof generation.")
+            return
+        }
+
+        const groupId = process.env.NEXT_PUBLIC_GROUP_ID
+        if (!groupId) {
+            setLog("❌ Missing NEXT_PUBLIC_GROUP_ID configuration.")
+            return
+        }
+
+        lastGesture.current = gesture
+        if (cooldownRef.current) {
+            clearTimeout(cooldownRef.current)
+            cooldownRef.current = null
+        }
+
+        const signal = gesture === "YES" ? "1" : "0"
+        const group = new Group(_users)
+        const hashToField = (value: string | bigint) => {
+            const bigintValue = typeof value === "bigint" ? value : BigInt(value)
+            const hashed = keccak256(toBeHex(bigintValue, 32))
+            return (BigInt(hashed) >> 8n).toString()
+        }
+
+        const run = async () => {
+            try {
+                setLog(`Detected ${gesture} gesture - generating ZK proof...`)
+
+                const proof = await generateProof(_identity, group, signal, groupId)
+                const unpacked = unpackGroth16Proof(proof.points)
+                const signalField = hashToField((proof as any).message ?? signal)
+                const externalNullifier = hashToField((proof as any).scope ?? groupId)
+
+                if (typeof window === "undefined" || !(window as any).ethereum) {
+                    setLog("❌ Error submitting vote: wallet provider not found.")
+                    return
+                }
+
+                setLog("Submitting vote on-chain...")
+
+                const provider = new ethers.BrowserProvider((window as any).ethereum)
+                const signer = await provider.getSigner()
+                const contract = new ethers.Contract(
+                    process.env.NEXT_PUBLIC_DAOACTIONSZK_ADDRESS || "0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2",
+                    DaoActionsZK.abi,
+                    signer
+                )
+
+                const tx = await contract.submitVote(
+                    [unpacked.pi_a[0].toString(), unpacked.pi_a[1].toString()],
+                    [
+                        [unpacked.pi_b[0][0].toString(), unpacked.pi_b[0][1].toString()],
+                        [unpacked.pi_b[1][0].toString(), unpacked.pi_b[1][1].toString()]
+                    ],
+                    [unpacked.pi_c[0].toString(), unpacked.pi_c[1].toString()],
+                    proof.merkleTreeRoot.toString(),
+                    proof.nullifier.toString(),
+                    signalField,
+                    externalNullifier
+                )
+
+                setLog("Vote submitted - waiting for confirmation...")
+                await tx.wait()
+                setLog(`✅ Vote transaction confirmed! Hash: ${tx.hash}`)
+            } catch (err: unknown) {
+                console.error(err)
+
+                const message = err instanceof Error ? err.message : "Unknown error"
+                setLog("❌ Error submitting vote: " + message)
+            } finally {
+                cooldownRef.current = setTimeout(() => {
+                    lastGesture.current = ""
+                    cooldownRef.current = null
+                }, 5000)
+            }
+        }
+
+        run()
+    }, [gesture, _identity, _users, setLog])
 
     return (
         <>
