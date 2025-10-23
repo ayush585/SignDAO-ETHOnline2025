@@ -1,4 +1,6 @@
 # Dependencies for the local Flask gesture bridge.
 flask
 flask-cors
-
+mediapipe
+opencv-python
+numpy
