@@ -9,13 +9,14 @@ export async function POST(req: NextRequest) {
 
     const ethereumPrivateKey = process.env.ETHEREUM_PRIVATE_KEY
     const rpcUrl =
+        process.env.NEXT_PUBLIC_SEPOLIA_RPC ??
         process.env.NEXT_PUBLIC_RPC_URL ??
         process.env.NEXT_PUBLIC_PROVIDER_URL ??
         process.env.NEXT_PUBLIC_JSON_RPC_URL
     const contractAddress = process.env.NEXT_PUBLIC_FEEDBACK_CONTRACT_ADDRESS as string
 
     if (!rpcUrl) {
-        throw new Error("Please, define NEXT_PUBLIC_RPC_URL in your .env file")
+        throw new Error("Please, define NEXT_PUBLIC_SEPOLIA_RPC in your .env file")
     }
 
     const provider = new JsonRpcProvider(rpcUrl)

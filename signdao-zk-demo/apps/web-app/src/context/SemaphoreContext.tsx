@@ -1,8 +1,17 @@
 "use client"
 
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react"
+import React, {
+    createContext,
+    ReactNode,
+    useCallback,
+    useContext,
+    useEffect,
+    useMemo,
+    useState
+} from "react"
 import { SemaphoreEthers } from "@semaphore-protocol/data"
 import { decodeBytes32String, toBeHex } from "ethers"
+import { getReadProvider } from "@/lib/eth"
 
 export type SemaphoreContextType = {
     _users: string[]
@@ -19,25 +28,28 @@ interface ProviderProps {
     children: ReactNode
 }
 
-const ethereumNetwork =
-    process.env.NEXT_PUBLIC_DEFAULT_NETWORK === "localhost"
-        ? "http://127.0.0.1:8545"
-        : process.env.NEXT_PUBLIC_DEFAULT_NETWORK
-
 export const SemaphoreContextProvider: React.FC<ProviderProps> = ({ children }) => {
     const [_users, setUsers] = useState<any[]>([])
     const [_feedback, setFeedback] = useState<string[]>([])
+    const readProvider = useMemo(() => getReadProvider(), [])
+    const semaphore = useMemo(() => {
+        const connection = (readProvider as any)._getConnection?.()
+        const rpcUrl = connection?.url ?? process.env.NEXT_PUBLIC_SEPOLIA_RPC
+        if (!rpcUrl) {
+            throw new Error("NEXT_PUBLIC_SEPOLIA_RPC missing")
+        }
 
-    const refreshUsers = useCallback(async (): Promise<void> => {
-        const semaphore = new SemaphoreEthers(ethereumNetwork, {
+        return new SemaphoreEthers(rpcUrl, {
             address: process.env.NEXT_PUBLIC_SEMAPHORE_CONTRACT_ADDRESS,
             projectId: process.env.NEXT_PUBLIC_INFURA_API_KEY
         })
+    }, [readProvider])
 
+    const refreshUsers = useCallback(async (): Promise<void> => {
         const members = await semaphore.getGroupMembers(process.env.NEXT_PUBLIC_GROUP_ID as string)
 
         setUsers(members.map((member) => member.toString()))
-    }, [])
+    }, [semaphore])
 
     const addUser = useCallback(
         (user: any) => {
@@ -47,15 +59,10 @@ export const SemaphoreContextProvider: React.FC<ProviderProps> = ({ children }) 
     )
 
     const refreshFeedback = useCallback(async (): Promise<void> => {
-        const semaphore = new SemaphoreEthers(ethereumNetwork, {
-            address: process.env.NEXT_PUBLIC_SEMAPHORE_CONTRACT_ADDRESS,
-            projectId: process.env.NEXT_PUBLIC_INFURA_API_KEY
-        })
-
         const proofs = await semaphore.getGroupValidatedProofs(process.env.NEXT_PUBLIC_GROUP_ID as string)
 
         setFeedback(proofs.map(({ message }: any) => decodeBytes32String(toBeHex(message, 32))))
-    }, [])
+    }, [semaphore])
 
     const addFeedback = useCallback(
         (feedback: string) => {

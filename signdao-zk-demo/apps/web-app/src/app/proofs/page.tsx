@@ -3,6 +3,7 @@
 import Stepper from "@/components/Stepper"
 import { useLogContext } from "@/context/LogContext"
 import { useSemaphoreContext } from "@/context/SemaphoreContext"
+import { getBrowserProviderAndSigner } from "@/lib/eth"
 import { generateProof, Group } from "@semaphore-protocol/core"
 import { unpackGroth16Proof } from "@zk-kit/utils/proof-packing"
 import { encodeBytes32String, ethers, keccak256, toBeHex } from "ethers"
@@ -11,6 +12,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Feedback from "../../../contract-artifacts/Feedback.json"
 import DaoActionsZK from "../../../contract-artifacts/DaoActionsZK.json"
 import useSemaphoreIdentity from "@/hooks/useSemaphoreIdentity"
+
+const DAO_ACTIONS_ADDR = process.env.NEXT_PUBLIC_DAO_ACTIONS_ADDR
 
 type GesturePayload = {
     gesture: string
@@ -211,7 +214,16 @@ export default function ProofsPage() {
             cooldownRef.current = null
         }
 
-        const signal = gesture === "YES" ? "1" : "0"
+        if (gesture !== "YES") {
+            setLog("Detected NO gesture. Vote not submitted.")
+            cooldownRef.current = setTimeout(() => {
+                lastGesture.current = ""
+                cooldownRef.current = null
+            }, 5000)
+            return
+        }
+
+        const signal = "1"
         const group = new Group(_users)
         const hashToField = (value: string | bigint) => {
             const bigintValue = typeof value === "bigint" ? value : BigInt(value)
@@ -228,22 +240,7 @@ export default function ProofsPage() {
                 const signalField = hashToField((proof as any).message ?? signal)
                 const externalNullifier = hashToField((proof as any).scope ?? groupId)
 
-                if (typeof window === "undefined" || !(window as any).ethereum) {
-                    setLog("❌ Error submitting vote: wallet provider not found.")
-                    return
-                }
-
-                setLog("Submitting vote on-chain...")
-
-                const provider = new ethers.BrowserProvider((window as any).ethereum)
-                const signer = await provider.getSigner()
-                const contract = new ethers.Contract(
-                    process.env.NEXT_PUBLIC_DAOACTIONSZK_ADDRESS || "0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2",
-                    DaoActionsZK.abi,
-                    signer
-                )
-
-                const tx = await contract.submitVote(
+                const proofPayload = [
                     [unpacked.pi_a[0].toString(), unpacked.pi_a[1].toString()],
                     [
                         [unpacked.pi_b[0][0].toString(), unpacked.pi_b[0][1].toString()],
@@ -254,11 +251,9 @@ export default function ProofsPage() {
                     proof.nullifier.toString(),
                     signalField,
                     externalNullifier
-                )
+                ]
 
-                setLog("Vote submitted - waiting for confirmation...")
-                await tx.wait()
-                setLog(`✅ Vote transaction confirmed! Hash: ${tx.hash}`)
+                await submitVote(proofPayload, setLog)
             } catch (err: unknown) {
                 console.error(err)
 
@@ -342,4 +337,28 @@ export default function ProofsPage() {
             <Stepper step={3} onPrevClick={() => router.push("/group")} />
         </>
     )
+}
+
+async function submitVote(proofTuple: any[], setLog: (msg: string) => void) {
+    try {
+        if (!DAO_ACTIONS_ADDR) {
+            throw new Error("Missing NEXT_PUBLIC_DAO_ACTIONS_ADDR")
+        }
+
+        setLog("Connecting wallet…")
+        const { signer } = await getBrowserProviderAndSigner()
+        const contract = new ethers.Contract(DAO_ACTIONS_ADDR, DaoActionsZK.abi, signer)
+
+        setLog("Submitting vote tx…")
+        const tx = await contract.submitVote(...proofTuple)
+        console.log("tx hash:", tx.hash)
+
+        setLog("Waiting for confirmation…")
+        await tx.wait()
+        setLog("✅ Vote confirmed on Sepolia")
+    } catch (error: unknown) {
+        console.error("❌ Transaction failed:", error)
+        const message = error && typeof error === "object" && "message" in error ? (error as any).message : "Tx failed"
+        setLog(`❌ Error submitting vote: ${message}`)
+    }
 }
