@@ -3,17 +3,14 @@
 import Stepper from "@/components/Stepper"
 import { useLogContext } from "@/context/LogContext"
 import { useSemaphoreContext } from "@/context/SemaphoreContext"
-import { getBrowserProviderAndSigner } from "@/lib/eth"
+import { useWalletAddress } from "@/lib/useWalletAddress"
+import { assertDaoDeployed, assertFeedbackDeployed, getDaoWrite, getFeedbackWrite } from "@/lib/contracts"
 import { generateProof, Group } from "@semaphore-protocol/core"
 import { unpackGroth16Proof } from "@zk-kit/utils/proof-packing"
-import { encodeBytes32String, ethers, keccak256, toBeHex } from "ethers"
+import { encodeBytes32String, keccak256, toBeHex } from "ethers"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import Feedback from "../../../contract-artifacts/Feedback.json"
-import DaoActionsZK from "../../../contract-artifacts/DaoActionsZK.json"
 import useSemaphoreIdentity from "@/hooks/useSemaphoreIdentity"
-
-const DAO_ACTIONS_ADDR = process.env.NEXT_PUBLIC_DAO_ACTIONS_ADDR
 
 type GesturePayload = {
     gesture: string
@@ -25,12 +22,27 @@ export default function ProofsPage() {
     const { setLog } = useLogContext()
     const { _users, _feedback, refreshFeedback, addFeedback } = useSemaphoreContext()
     const [_loading, setLoading] = useState(false)
+    const { address, chainId, setLastTxHash } = useWalletAddress()
     const { _identity } = useSemaphoreIdentity()
+    const isConnected = Boolean(address)
+    const isCorrectChain = chainId === 11155111
+    const canTransact = isConnected && isCorrectChain
+    const [txInfo, setTxInfo] = useState<{ hash: string; message: string } | null>(null)
     const [gesture, setGesture] = useState<string>("")
     const [confidence, setConfidence] = useState<number | null>(null)
     const [error, setError] = useState<string>("")
     const lastGesture = useRef<string>("")
     const cooldownRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const requestSepoliaSwitch = useCallback(async () => {
+        try {
+            await window.ethereum?.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: "0xaa36a7" }]
+            })
+        } catch (error) {
+            console.error("[wallet] failed to switch chain from proofs page", error)
+        }
+    }, [])
 
     useEffect(() => {
         return () => {
@@ -39,6 +51,12 @@ export default function ProofsPage() {
             }
         }
     }, [])
+
+    useEffect(() => {
+        if (!canTransact && txInfo) {
+            setTxInfo(null)
+        }
+    }, [canTransact, txInfo])
 
     useEffect(() => {
         let mounted = true
@@ -90,21 +108,30 @@ export default function ProofsPage() {
     const feedback = useMemo(() => [..._feedback].reverse(), [_feedback])
 
     const sendFeedback = useCallback(async () => {
+        if (!isConnected) {
+            setLog("Connect your wallet before posting feedback.")
+            return
+        }
+        if (!isCorrectChain) {
+            setLog("Switch to Sepolia to post feedback.")
+            return
+        }
         if (!_identity) {
             return
         }
 
-        const feedback = prompt("Please enter your feedback:")
+        const feedbackMessage = prompt("Please enter your feedback:")
 
-        if (feedback && _users) {
+        if (feedbackMessage && _users) {
             setLoading(true)
+            setTxInfo(null)
 
             setLog(`Posting your anonymous feedback...`)
 
             try {
                 const group = new Group(_users)
 
-                const message = encodeBytes32String(feedback)
+                const message = encodeBytes32String(feedbackMessage)
 
                 const { points, merkleTreeDepth, merkleTreeRoot, nullifier } = await generateProof(
                     _identity,
@@ -113,82 +140,56 @@ export default function ProofsPage() {
                     process.env.NEXT_PUBLIC_GROUP_ID as string
                 )
 
-                let feedbackSent: boolean = false
-                const params = [merkleTreeDepth, merkleTreeRoot, nullifier, message, points]
-                if (process.env.NEXT_PUBLIC_OPENZEPPELIN_AUTOTASK_WEBHOOK) {
-                    const response = await fetch(process.env.NEXT_PUBLIC_OPENZEPPELIN_AUTOTASK_WEBHOOK, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            abi: Feedback.abi,
-                            address: process.env.NEXT_PUBLIC_FEEDBACK_CONTRACT_ADDRESS,
-                            functionName: "sendFeedback",
-                            functionParameters: params
-                        })
-                    })
-
-                    if (response.status === 200) {
-                        feedbackSent = true
-                    }
-                } else if (
-                    process.env.NEXT_PUBLIC_GELATO_RELAYER_ENDPOINT &&
-                    process.env.NEXT_PUBLIC_GELATO_RELAYER_CHAIN_ID &&
-                    process.env.GELATO_RELAYER_API_KEY
-                ) {
-                    const iface = new ethers.Interface(Feedback.abi)
-                    const request = {
-                        chainId: process.env.NEXT_PUBLIC_GELATO_RELAYER_CHAIN_ID,
-                        target: process.env.NEXT_PUBLIC_FEEDBACK_CONTRACT_ADDRESS,
-                        data: iface.encodeFunctionData("sendFeedback", params),
-                        sponsorApiKey: process.env.GELATO_RELAYER_API_KEY
-                    }
-                    const response = await fetch(process.env.NEXT_PUBLIC_GELATO_RELAYER_ENDPOINT, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify(request)
-                    })
-
-                    if (response.status === 201) {
-                        feedbackSent = true
-                    }
-                } else {
-                    const response = await fetch("api/feedback", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                            feedback: message,
-                            merkleTreeDepth,
-                            merkleTreeRoot,
-                            nullifier,
-                            points
-                        })
-                    })
-
-                    if (response.status === 200) {
-                        feedbackSent = true
-                    }
-                }
-
-                if (feedbackSent) {
-                    addFeedback(feedback)
-
-                    setLog(`Your feedback has been posted 🎉`)
-                } else {
-                    setLog("Some error occurred, please try again!")
-                }
+                await assertFeedbackDeployed()
+                const contract = await getFeedbackWrite()
+                const tx = await contract.sendFeedback(merkleTreeDepth, merkleTreeRoot, nullifier, message, points)
+                setTxInfo({ hash: tx.hash, message: "Feedback transaction sent." })
+                setLastTxHash(tx.hash)
+                setLog(`Waiting for confirmation… tx: ${tx.hash}`)
+                await tx.wait()
+                setTxInfo({ hash: tx.hash, message: "Feedback confirmed on Sepolia." })
+                addFeedback(feedbackMessage)
+                await refreshFeedback()
+                setLog("✅ Your feedback has been posted 🎉")
             } catch (error) {
                 console.error(error)
 
-                setLog("Some error occurred, please try again!")
+                const message =
+                    error && typeof error === "object" && "message" in error
+                        ? (error as { message?: string }).message
+                        : "Some error occurred, please try again!"
+                setLog(`❌ ${message}`)
+                setTxInfo(null)
             } finally {
                 setLoading(false)
             }
         }
-    }, [_identity, _users, addFeedback, setLoading, setLog])
+    }, [
+        _identity,
+        _users,
+        addFeedback,
+        isConnected,
+        isCorrectChain,
+        refreshFeedback,
+        setTxInfo,
+        setLastTxHash,
+        setLoading,
+        setLog
+    ])
 
     useEffect(() => {
         const isVoteGesture = gesture === "YES" || gesture === "NO"
         if (!isVoteGesture || gesture === lastGesture.current) {
+            return
+        }
+
+        if (!isConnected) {
+            setLog("Connect your wallet before voting.")
+            return
+        }
+
+        if (!isCorrectChain) {
+            setLog("Switch MetaMask to Sepolia before voting.")
             return
         }
 
@@ -253,7 +254,12 @@ export default function ProofsPage() {
                     externalNullifier
                 ]
 
-                await submitVote(proofPayload, setLog)
+                setTxInfo(null)
+                const hash = await submitVote(proofPayload, setLog)
+                if (hash) {
+                    setTxInfo({ hash, message: "Vote confirmed on Sepolia." })
+                    setLastTxHash(hash)
+                }
             } catch (err: unknown) {
                 console.error(err)
 
@@ -268,10 +274,35 @@ export default function ProofsPage() {
         }
 
         run()
-    }, [gesture, _identity, _users, setLog])
+    }, [gesture, _identity, _users, isConnected, isCorrectChain, setLastTxHash, setLog])
 
     return (
         <>
+            {!isConnected && (
+                <div className="wallet-guard" role="alert">
+                    Connect your wallet to interact with proofs.
+                </div>
+            )}
+            {isConnected && !isCorrectChain && (
+                <div className="wallet-guard" role="alert">
+                    <span>Switch your wallet to Sepolia to continue.</span>
+                    <button type="button" onClick={requestSepoliaSwitch}>
+                        Switch to Sepolia
+                    </button>
+                </div>
+            )}
+            {txInfo && (
+                <div className="tx-toast" role="status">
+                    <span>{txInfo.message}</span>
+                    <a
+                        href={`https://sepolia.etherscan.io/tx/${txInfo.hash}`}
+                        target="_blank"
+                        rel="noreferrer noopener nofollow"
+                    >
+                        View on Etherscan ↗
+                    </a>
+                </div>
+            )}
             <section className="gesture-vote">
                 <h2>Gesture Vote</h2>
                 <p>Gesture: {gesture ? gesture : "Waiting..."}</p>
@@ -326,7 +357,12 @@ export default function ProofsPage() {
             )}
 
             <div className="send-feedback-button">
-                <button className="button" onClick={sendFeedback} disabled={_loading}>
+                <button
+                    className="button"
+                    onClick={sendFeedback}
+                    disabled={_loading || !canTransact}
+                    title={!isConnected ? "Connect wallet first" : !isCorrectChain ? "Switch to Sepolia" : ""}
+                >
                     <span>Send Feedback</span>
                     {_loading && <div className="loader"></div>}
                 </button>
@@ -339,26 +375,23 @@ export default function ProofsPage() {
     )
 }
 
-async function submitVote(proofTuple: any[], setLog: (msg: string) => void) {
+async function submitVote(proofTuple: any[], setLog: (msg: string) => void): Promise<string | null> {
     try {
-        if (!DAO_ACTIONS_ADDR) {
-            throw new Error("Missing NEXT_PUBLIC_DAO_ACTIONS_ADDR")
-        }
-
-        setLog("Connecting wallet…")
-        const { signer } = await getBrowserProviderAndSigner()
-        const contract = new ethers.Contract(DAO_ACTIONS_ADDR, DaoActionsZK.abi, signer)
+        await assertDaoDeployed()
+        const contract = await getDaoWrite()
 
         setLog("Submitting vote tx…")
         const tx = await contract.submitVote(...proofTuple)
         console.log("tx hash:", tx.hash)
 
-        setLog("Waiting for confirmation…")
+        setLog(`Waiting for confirmation… tx: ${tx.hash}`)
         await tx.wait()
-        setLog("✅ Vote confirmed on Sepolia")
+        setLog(`✅ Vote confirmed on Sepolia — https://sepolia.etherscan.io/tx/${tx.hash}`)
+        return tx.hash
     } catch (error: unknown) {
         console.error("❌ Transaction failed:", error)
         const message = error && typeof error === "object" && "message" in error ? (error as any).message : "Tx failed"
         setLog(`❌ Error submitting vote: ${message}`)
+        return null
     }
 }

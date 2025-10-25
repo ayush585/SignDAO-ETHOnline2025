@@ -2,6 +2,7 @@ import PageContainer from "@/components/PageContainer"
 import type { Metadata } from "next"
 import { LogContextProvider } from "@/context/LogContext"
 import { SemaphoreContextProvider } from "@/context/SemaphoreContext"
+import Header from "@/components/Header"
 import "./globals.css"
 
 import { Inter } from "next/font/google"
@@ -45,6 +46,7 @@ export default function RootLayout({
             <body suppressHydrationWarning className={inter.className}>
                 <SemaphoreContextProvider>
                     <LogContextProvider>
+                        <Header />
                         <PageContainer>{children}</PageContainer>
                     </LogContextProvider>
                 </SemaphoreContextProvider>

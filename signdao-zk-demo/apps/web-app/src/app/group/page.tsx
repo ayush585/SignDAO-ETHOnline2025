@@ -3,11 +3,10 @@ import Stepper from "@/components/Stepper"
 import { useLogContext } from "@/context/LogContext"
 import { useSemaphoreContext } from "@/context/SemaphoreContext"
 import { useRouter } from "next/navigation"
-import { useCallback, useEffect, useMemo } from "react"
-import Feedback from "../../../contract-artifacts/Feedback.json"
-import { ethers } from "ethers"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import useSemaphoreIdentity from "@/hooks/useSemaphoreIdentity"
-import { useState } from "react"
+import { useWalletAddress } from "@/lib/useWalletAddress"
+import { assertFeedbackDeployed, getFeedbackWrite } from "@/lib/contracts"
 
 export default function GroupsPage() {
     const router = useRouter()
@@ -15,12 +14,33 @@ export default function GroupsPage() {
     const { _users, refreshUsers, addUser } = useSemaphoreContext()
     const [_loading, setLoading] = useState(false)
     const { _identity } = useSemaphoreIdentity()
+    const { address, chainId, setLastTxHash } = useWalletAddress()
+    const isConnected = Boolean(address)
+    const isCorrectChain = chainId === 11155111
+    const canTransact = isConnected && isCorrectChain
+    const [txHash, setTxHash] = useState<string | null>(null)
+    const requestSepoliaSwitch = useCallback(async () => {
+        try {
+            await window.ethereum?.request({
+                method: "wallet_switchEthereumChain",
+                params: [{ chainId: "0xaa36a7" }]
+            })
+        } catch (error) {
+            console.error("[wallet] failed to switch chain from group page", error)
+        }
+    }, [])
 
     useEffect(() => {
         if (_users.length > 0) {
             setLog(`${_users.length} user${_users.length > 1 ? "s" : ""} retrieved from the group 🤙🏽`)
         }
     }, [_users, setLog])
+
+    useEffect(() => {
+        if (!canTransact && txHash) {
+            setTxHash(null)
+        }
+    }, [canTransact, txHash])
 
     const users = useMemo(() => [..._users].reverse(), [_users])
 
@@ -29,71 +49,53 @@ export default function GroupsPage() {
             return
         }
 
+        if (!isConnected) {
+            setLog("Connect your wallet before joining the group.")
+            return
+        }
+
+        if (!isCorrectChain) {
+            setLog("Switch to Sepolia before joining the group.")
+            return
+        }
+
         setLoading(true)
-        setLog(`Joining the Feedback group...`)
+        setTxHash(null)
+        setLog("Joining the Feedback group…")
 
-        let joinedGroup: boolean = false
-
-        if (process.env.NEXT_PUBLIC_OPENZEPPELIN_AUTOTASK_WEBHOOK) {
-            const response = await fetch(process.env.NEXT_PUBLIC_OPENZEPPELIN_AUTOTASK_WEBHOOK, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    abi: Feedback.abi,
-                    address: process.env.NEXT_PUBLIC_FEEDBACK_CONTRACT_ADDRESS as string,
-                    functionName: "joinGroup",
-                    functionParameters: [_identity.commitment.toString()]
-                })
-            })
-
-            if (response.status === 200) {
-                joinedGroup = true
-            }
-        } else if (
-            process.env.NEXT_PUBLIC_GELATO_RELAYER_ENDPOINT &&
-            process.env.NEXT_PUBLIC_GELATO_RELAYER_CHAIN_ID &&
-            process.env.GELATO_RELAYER_API_KEY
-        ) {
-            const iface = new ethers.Interface(Feedback.abi)
-            const request = {
-                chainId: process.env.NEXT_PUBLIC_GELATO_RELAYER_CHAIN_ID,
-                target: process.env.NEXT_PUBLIC_FEEDBACK_CONTRACT_ADDRESS,
-                data: iface.encodeFunctionData("joinGroup", [_identity.commitment.toString()]),
-                sponsorApiKey: process.env.GELATO_RELAYER_API_KEY
-            }
-            const response = await fetch(process.env.NEXT_PUBLIC_GELATO_RELAYER_ENDPOINT, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(request)
-            })
-
-            if (response.status === 201) {
-                joinedGroup = true
-            }
-        } else {
-            const response = await fetch("api/join", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    identityCommitment: _identity.commitment.toString()
-                })
-            })
-
-            if (response.status === 200) {
-                joinedGroup = true
-            }
+        try {
+            await assertFeedbackDeployed()
+            const contract = await getFeedbackWrite()
+            const commitment = _identity.commitment.toString()
+            const tx = await contract.joinGroup(commitment)
+            setLog(`Waiting for confirmation… tx: ${tx.hash}`)
+            await tx.wait()
+            setTxHash(tx.hash)
+            setLastTxHash(tx.hash)
+            await refreshUsers()
+            addUser(commitment)
+            setLog("✅ You have joined the Feedback group event 🎉 Share your feedback anonymously!")
+        } catch (error) {
+            console.error(error)
+            const message =
+                error && typeof error === "object" && "message" in error
+                    ? (error as { message?: string }).message
+                    : "Some error occurred, please try again!"
+            setLog(`❌ ${message}`)
+            setTxHash(null)
+        } finally {
+            setLoading(false)
         }
-
-        if (joinedGroup) {
-            addUser(_identity.commitment.toString())
-
-            setLog(`You have joined the Feedback group event 🎉 Share your feedback anonymously!`)
-        } else {
-            setLog("Some error occurred, please try again!")
-        }
-
-        setLoading(false)
-    }, [_identity, addUser, setLoading, setLog])
+    }, [
+        _identity,
+        addUser,
+        isConnected,
+        isCorrectChain,
+        refreshUsers,
+        setLastTxHash,
+        setLog,
+        setLoading
+    ])
 
     const userHasJoined = useMemo(
         () => _identity !== undefined && _users.includes(_identity.commitment.toString()),
@@ -102,6 +104,31 @@ export default function GroupsPage() {
 
     return (
         <>
+            {!isConnected && (
+                <div className="wallet-guard" role="alert">
+                    Connect your wallet to manage group membership.
+                </div>
+            )}
+            {isConnected && !isCorrectChain && (
+                <div className="wallet-guard" role="alert">
+                    <span>Switch your wallet to Sepolia to join the group.</span>
+                    <button type="button" onClick={requestSepoliaSwitch}>
+                        Switch to Sepolia
+                    </button>
+                </div>
+            )}
+            {txHash && (
+                <div className="tx-toast" role="status">
+                    <span>Join confirmed on Sepolia.</span>
+                    <a
+                        href={`https://sepolia.etherscan.io/tx/${txHash}`}
+                        target="_blank"
+                        rel="noreferrer noopener nofollow"
+                    >
+                        View on Etherscan ↗
+                    </a>
+                </div>
+            )}
             <h2>Groups</h2>
 
             <p>
@@ -157,7 +184,8 @@ export default function GroupsPage() {
                 <button
                     className="button"
                     onClick={joinGroup}
-                    disabled={_loading || !_identity || userHasJoined}
+                    disabled={_loading || !_identity || userHasJoined || !canTransact}
+                    title={!isConnected ? "Connect wallet first" : !isCorrectChain ? "Switch to Sepolia" : ""}
                     type="button"
                 >
                     <span>Join group</span>

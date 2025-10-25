@@ -279,6 +279,120 @@ a:hover {
     align-items: center;
 }
 
+.last-tx-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    background: rgba(79, 70, 229, 0.2);
+    color: #c7d2fe;
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.last-tx-pill:hover {
+    text-decoration: none;
+    background: rgba(99, 102, 241, 0.25);
+    color: #e0e7ff;
+}
+
+.chain-banner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    background: rgba(248, 113, 113, 0.1);
+    color: #fecaca;
+    border-bottom: 1px solid rgba(248, 113, 113, 0.3);
+    font-size: 0.85rem;
+}
+
+.chain-banner button {
+    border: 1px solid rgba(248, 113, 113, 0.45);
+    background: rgba(127, 29, 29, 0.4);
+    color: #fee2e2;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.chain-banner button:hover {
+    background: rgba(248, 113, 113, 0.35);
+    color: #fff;
+}
+
+.config-banner {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: rgba(234, 179, 8, 0.12);
+    color: #facc15;
+    border-bottom: 1px solid rgba(234, 179, 8, 0.25);
+    font-size: 0.8rem;
+}
+
+.wallet-guard {
+    margin: 0.75rem auto;
+    padding: 0.6rem 1rem;
+    border-radius: 10px;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(129, 140, 248, 0.35);
+    color: #c7d2fe;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    font-size: 0.85rem;
+    max-width: 40rem;
+}
+
+.wallet-guard button {
+    cursor: pointer;
+    border: 1px solid rgba(129, 140, 248, 0.4);
+    background: rgba(129, 140, 248, 0.25);
+    color: #e0e7ff;
+    padding: 0.35rem 0.9rem;
+    border-radius: 999px;
+    font-weight: 600;
+}
+
+.wallet-guard button:hover {
+    background: rgba(129, 140, 248, 0.4);
+}
+
+.tx-toast {
+    margin: 0.75rem auto;
+    padding: 0.7rem 1rem;
+    border-radius: 10px;
+    background: rgba(34, 197, 94, 0.1);
+    border: 1px solid rgba(34, 197, 94, 0.3);
+    color: #bbf7d0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.85rem;
+    gap: 1rem;
+    max-width: 40rem;
+}
+
+.tx-toast a {
+    color: #86efac;
+    font-weight: 600;
+}
+
+.tx-toast a:hover {
+    color: #dcfce7;
+    text-decoration: none;
+}
+
 .footer {
     background-color: var(--darkBlueBg);
     padding: 1rem 0;
