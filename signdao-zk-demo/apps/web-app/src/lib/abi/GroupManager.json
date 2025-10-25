@@ -1,0 +1,37 @@
+[
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "name": "createGroup",
+    "inputs": [
+      { "name": "groupId", "type": "uint256" },
+      { "name": "depth", "type": "uint8" },
+      { "name": "admin", "type": "address" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "nonpayable",
+    "name": "joinGroup",
+    "inputs": [
+      { "name": "groupId", "type": "uint256" },
+      { "name": "identityCommitment", "type": "uint256" }
+    ],
+    "outputs": []
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "name": "getGroupAdmin",
+    "inputs": [{ "name": "groupId", "type": "uint256" }],
+    "outputs": [{ "name": "", "type": "address" }]
+  },
+  {
+    "type": "function",
+    "stateMutability": "view",
+    "name": "getGroupMembers",
+    "inputs": [{ "name": "groupId", "type": "uint256" }],
+    "outputs": [{ "name": "", "type": "uint256[]" }]
+  }
+]

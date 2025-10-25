@@ -1,16 +1,8 @@
 "use client"
 
-import React, {
-    createContext,
-    ReactNode,
-    useCallback,
-    useContext,
-    useEffect,
-    useMemo,
-    useState
-} from "react"
-import { SemaphoreEthers } from "@semaphore-protocol/data"
-import { decodeBytes32String, toBeHex } from "ethers"
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from "react"
+import { ethers } from "ethers"
+import GroupManagerAbi from "@/lib/abi/GroupManager.json"
 import { getReadProvider } from "@/lib/eth"
 
 export type SemaphoreContextType = {
@@ -24,52 +16,40 @@ export type SemaphoreContextType = {
 
 const SemaphoreContext = createContext<SemaphoreContextType | null>(null)
 
+const GROUP_ADDR = process.env.NEXT_PUBLIC_GROUP_MANAGER_ADDR as `0x${string}`
+if (!GROUP_ADDR) {
+    throw new Error("NEXT_PUBLIC_GROUP_MANAGER_ADDR missing")
+}
+const GROUP_ID = BigInt(process.env.NEXT_PUBLIC_GROUP_ID || "1001")
+const groupRead = new ethers.Contract(GROUP_ADDR, GroupManagerAbi, getReadProvider())
+
 interface ProviderProps {
     children: ReactNode
 }
 
 export const SemaphoreContextProvider: React.FC<ProviderProps> = ({ children }) => {
-    const [_users, setUsers] = useState<any[]>([])
+    const [_users, setUsers] = useState<string[]>([])
     const [_feedback, setFeedback] = useState<string[]>([])
-    const readProvider = useMemo(() => getReadProvider(), [])
-    const semaphore = useMemo(() => {
-        const connection = (readProvider as any)._getConnection?.()
-        const rpcUrl = connection?.url ?? process.env.NEXT_PUBLIC_SEPOLIA_RPC
-        if (!rpcUrl) {
-            throw new Error("NEXT_PUBLIC_SEPOLIA_RPC missing")
-        }
-
-        return new SemaphoreEthers(rpcUrl, {
-            address: process.env.NEXT_PUBLIC_SEMAPHORE_CONTRACT_ADDRESS,
-            projectId: process.env.NEXT_PUBLIC_INFURA_API_KEY
-        })
-    }, [readProvider])
-
     const refreshUsers = useCallback(async (): Promise<void> => {
-        const members = await semaphore.getGroupMembers(process.env.NEXT_PUBLIC_GROUP_ID as string)
+        try {
+            const members: bigint[] = await groupRead.getGroupMembers(GROUP_ID)
+            setUsers(members.map((member) => member.toString()))
+        } catch {
+            setUsers([])
+        }
+    }, [])
 
-        setUsers(members.map((member) => member.toString()))
-    }, [semaphore])
-
-    const addUser = useCallback(
-        (user: any) => {
-            setUsers([..._users, user])
-        },
-        [_users]
-    )
+    const addUser = useCallback((user: string) => {
+        setUsers((prev) => (prev.includes(user) ? prev : [...prev, user]))
+    }, [])
 
     const refreshFeedback = useCallback(async (): Promise<void> => {
-        const proofs = await semaphore.getGroupValidatedProofs(process.env.NEXT_PUBLIC_GROUP_ID as string)
+        setFeedback([])
+    }, [])
 
-        setFeedback(proofs.map(({ message }: any) => decodeBytes32String(toBeHex(message, 32))))
-    }, [semaphore])
-
-    const addFeedback = useCallback(
-        (feedback: string) => {
-            setFeedback([..._feedback, feedback])
-        },
-        [_feedback]
-    )
+    const addFeedback = useCallback((feedback: string) => {
+        setFeedback((prev) => [...prev, feedback])
+    }, [])
 
     useEffect(() => {
         refreshUsers()

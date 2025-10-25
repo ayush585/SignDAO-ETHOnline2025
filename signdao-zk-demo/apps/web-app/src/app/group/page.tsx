@@ -6,28 +6,26 @@ import { useLogContext } from "@/context/LogContext";
 import { useSemaphoreContext } from "@/context/SemaphoreContext";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { ethers } from "ethers";
 import useSemaphoreIdentity from "@/hooks/useSemaphoreIdentity";
 import { useWalletAddress } from "@/lib/useWalletAddress";
-import { assertDaoDeployed, getDaoWrite, DAO_ADDR } from "@/lib/contracts";
+import { getBrowserProviderAndSigner } from "@/lib/eth";
+import GroupManagerAbi from "@/lib/abi/GroupManager.json";
+import { DAO_ADDR } from "@/lib/contracts";
 
 const SEPOLIA_CHAIN_ID = 11155111;
 const SEPOLIA_CHAIN_HEX = "0xaa36a7";
+const GROUP_ADDR = process.env.NEXT_PUBLIC_GROUP_MANAGER_ADDR as `0x${string}`;
+const GROUP_ID = BigInt(process.env.NEXT_PUBLIC_GROUP_ID || "1001");
 
-function parseGroupId(raw?: string): bigint | null {
-  if (!raw) return null;
-  try {
-    return BigInt(raw);
-  } catch (error) {
-    console.error("[group] invalid NEXT_PUBLIC_GROUP_ID", error);
-    return null;
+async function joinGroupTx(identityCommitment: bigint) {
+  if (!GROUP_ADDR) {
+    throw new Error("NEXT_PUBLIC_GROUP_MANAGER_ADDR is not configured.");
   }
-}
-
-async function joinGroup(groupId: bigint, identityCommitment: bigint) {
-  await assertDaoDeployed();
-  const dao = await getDaoWrite();
-  const tx = await dao.joinGroup(groupId, identityCommitment);
-  console.log("[joinGroup] tx:", tx.hash);
+  const { signer } = await getBrowserProviderAndSigner();
+  const gm = new ethers.Contract(GROUP_ADDR, GroupManagerAbi, signer);
+  const tx = await gm.joinGroup(GROUP_ID, identityCommitment);
+  // toast + https://sepolia.etherscan.io/tx/${tx.hash}
   await tx.wait();
   return tx.hash as string;
 }
@@ -51,7 +49,6 @@ export default function GroupsPage() {
   const isCorrectChain = chainId === SEPOLIA_CHAIN_ID;
   const canTransact = isConnected && isCorrectChain;
 
-  const groupId = useMemo(() => parseGroupId(process.env.NEXT_PUBLIC_GROUP_ID), []);
   const commitmentString = useMemo(() => (_identity ? _identity.commitment.toString() : null), [_identity]);
   const userHasJoined = useMemo(
     () => (commitmentString ? _users.includes(commitmentString) : false),
@@ -93,8 +90,8 @@ export default function GroupsPage() {
       setLog("Switch to Sepolia before joining the group.");
       return;
     }
-    if (!groupId) {
-      setLog("NEXT_PUBLIC_GROUP_ID is not configured.");
+    if (!GROUP_ADDR) {
+      setLog("NEXT_PUBLIC_GROUP_MANAGER_ADDR is not configured.");
       return;
     }
 
@@ -105,7 +102,7 @@ export default function GroupsPage() {
     setLog("Joining the group...");
 
     try {
-      const hash = await joinGroup(groupId, commitment);
+      const hash = await joinGroupTx(commitment);
       setTxInfo({ hash, message: "Join confirmed on Sepolia." });
       setLastTxHash(hash);
       await refreshUsers();
@@ -122,7 +119,6 @@ export default function GroupsPage() {
   }, [
     _identity,
     addUser,
-    groupId,
     isConnected,
     isCorrectChain,
     refreshUsers,
@@ -130,7 +126,7 @@ export default function GroupsPage() {
     setLog
   ]);
 
-  const disableJoin = joining || !_identity || userHasJoined || !canTransact || !groupId;
+  const disableJoin = joining || !_identity || userHasJoined || !canTransact || !GROUP_ADDR;
 
   return (
     <ClientOnly>
@@ -205,7 +201,15 @@ export default function GroupsPage() {
             className="button"
             onClick={handleJoinGroup}
             disabled={disableJoin}
-            title={!isConnected ? "Connect wallet first" : !isCorrectChain ? "Switch to Sepolia" : !groupId ? "Configure NEXT_PUBLIC_GROUP_ID" : ""}
+            title={
+              !isConnected
+                ? "Connect wallet first"
+                : !isCorrectChain
+                ? "Switch to Sepolia"
+                : !GROUP_ADDR
+                ? "Configure NEXT_PUBLIC_GROUP_MANAGER_ADDR"
+                : ""
+            }
             type="button"
           >
             <span>Join group</span>
