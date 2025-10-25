@@ -1,57 +1,184 @@
-# SignDAO: Gesture-Driven DAO Inclusion
-AI-powered oracle for sign language voting in DAOs, with ZK privacy.
+# 🖐️ SignDAO — Gesture-Driven DAO Inclusion
 
-## Problem
-DAOs exclude 70M+ deaf users due to text-based governance.
+**AI-powered oracle for sign language voting in DAOs, protected by Zero-Knowledge proofs.**
 
-## Solution
-SignDAO uses AI to translate sign language gestures into on-chain votes, with ZK privacy for anonymity.
+---
 
-## Tech Stack
-- AI: Python/MediaPipe
-- Blockchain: Solidity/Remix, Semaphore (ZK), Sepolia
-- Frontend: Next.js
+## 🧙‍♂️ Problem
 
-## Impact
-Enables inclusive Web3 for 1B+ underserved users.
+DAO governance today is **text-centric**, excluding 70 million+ deaf or hard-of-hearing users who use sign language as their primary medium.
 
-### Contracts (Sepolia)
+---
 
-- Semaphore Verifier @ `0x1851...3fc` (Tx: `0xd009...610f`)
-- DaoActionsZK @ `0x7b83...73f2` (Tx: `0x0e4d...7b72`)
-- DaoActions.sol @ `0x1Fdf28577154106956cfE5086a7d7B17b6Da4C1b` (verified)
-- GestureNFT.sol @ `0x8Ec061e0aF8A430eF1056ed377eDeAfB1cFE21cF` (verified)
-- ZK Verifier: 0x10d37E4cc006C49a05e3D5919519E25b6DdD2aEf (tx:0x20f9be9f2f2628a25f70d4e83b85a1d9d9533ef7c0f4599051c3f47305d90022)
-- DaoActions: 0xa697B278ad81aeFC24D85ADE99828BFf8758cE60
-  (verified on Sourcify & Routescan)
-| **DaoActionsZK.sol** | [`0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2`](https://testnet.routescan.io/address/0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2/contract/11155111/code) | Sepolia | Main DAO logic + ZK vote verification | ✅ Sourcify + Routescan |
-| **SemaphoreVerifier.sol** | [`0x185112CB3C2140858ff77C5B33F11Be8343ae3fc`](https://testnet.routescan.io/address/0x185112CB3C2140858ff77C5B33F11Be8343ae3fc/contract/11155111/code) | Sepolia | Groth16 Proof Verifier | ✅ Sourcify + Routescan |
-| **DaoActionsCore.sol** | Local | Hardhat | Staking + Proposal actions | 🧩 Core module |
+## 💡 Solution
 
+**SignDAO** enables fully private, gesture-based DAO voting.
+AI models recognize sign-language gestures → they’re converted to on-chain votes through **ZK-proofs** for anonymity and fairness.
 
-### ZK Privacy (Semaphore – Local Dev)
-- Run Hardhat local chain:
-  yarn workspace monorepo-ethers-contracts hardhat node
-- In another terminal, start the web app:
-  yarn workspace monorepo-ethers-web-app dev
-- MetaMask → Add network:
-  RPC https://127.0.0.1:8545  | Chain ID 31337 | Name Localhost 8545
-- Import test account (from Hardhat logs) and open http://localhost:3000
-  Create Identity → Join Group → Proofs → Send Feedback (zk proof).
+**Inclusion + Privacy = Accessible Web3 governance.**
 
-### Local Dev: Gesture Bridge
-Backend:
-```bash
-cd apps/backend
-pip install -r requirements.txt
-python api.py
-```
-Visit http://localhost:5000/gesture.
+---
 
-Frontend:
+## ⚙️ Tech Stack
+
+| Layer                           | Tools / Frameworks                               |
+| ------------------------------- | ------------------------------------------------ |
+| 🧠 **AI / Gesture Recognition** | Python · MediaPipe · FastAPI bridge              |
+| ⛓️ **Blockchain / ZK**          | Solidity · Semaphore · Hardhat · Sepolia Testnet |
+| 🌐 **Frontend**                 | Next.js · Ethers v6 · Tailwind · MetaMask signer |
+| 🔐 **ZK Proofs**                | Groth16 · Semaphore circuits                     |
+| 🧱 **Infra**                    | Routescan + Sourcify verified contracts          |
+
+---
+
+## 🌍 Impact
+
+Brings 1 B+ underserved users into on-chain governance.
+Every DAO member can vote *by signing*, not typing.
+
+---
+
+## 🔜 Verified Contracts (Sepolia Testnet – Chain 11155111)
+
+| Contract                        | Address                                                                                                                                                | Description                               | Verification           |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------- | ---------------------- |
+| **DaoActionsZK.sol**            | [`0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2`](https://testnet.routescan.io/address/0x7b8363901E588F44cD2904D61Ef5Ab83F59873f2/contract/11155111/code) | Main DAO logic + ZK vote verification     | ✅ Sourcify + Routescan |
+| **SemaphoreVerifier.sol**       | [`0x185112CB3C2140858ff77C5B33F11Be8343ae3fc`](https://testnet.routescan.io/address/0x185112CB3C2140858ff77C5B33F11Be8343ae3fc/contract/11155111/code) | Groth16 proof verifier                    | ✅ Sourcify + Routescan |
+| **DaoActions.sol**              | `0x1Fdf28577154106956cfE5086a7d7B17b6Da4C1b`                                                                                                           | Base DAO module (verified)                | ✅                      |
+| **GestureNFT.sol**              | `0x8Ec061e0aF8A430eF1056ed377eDeAfB1cFE21cF`                                                                                                           | Gesture reputation NFTs                   | ✅                      |
+| **DaoActionsZK (frontend env)** | `NEXT_PUBLIC_DAO_ACTIONS_ADDR` → Sepolia                                                                                                               | Used for group & vote writes via MetaMask | ✅                      |
+
+---
+
+## 🕵️‍♂️ DApp Flow
+
+1. **Connect Wallet** → MetaMask (Sepolia)
+2. **Create Identity** → Semaphore commitment
+3. **Create / Join Group** → On-chain via MetaMask signer
+4. **Make Gesture Vote** → ZK proof generated & verified
+5. **Confirm Tx** → View on Sepolia Etherscan
+
+All writes use the **MetaMask signer** (0xb9326…9636) — no private keys or backend wallets required.
+
+---
+
+## 🔧 Local Dev (Frontend + AI Bridge)
+
+### Frontend
+
 ```bash
 cd signdao-zk-demo/apps/web-app
 npm install
 npm run dev
+# Visit http://localhost:3000
 ```
-Visit http://localhost:3000/proofs.
+
+### Gesture Bridge (Python)
+
+```bash
+cd apps/backend
+pip install -r requirements.txt
+python api.py
+# Visit http://localhost:5000/gesture
+```
+
+### MetaMask Setup
+
+* Network: **Sepolia Testnet**
+  RPC: `https://rpc.sepolia.org`
+  Chain ID: 11155111
+* Fund account with Sepolia ETH ([https://sepoliafaucet.com](https://sepoliafaucet.com))
+* Connected wallet must match deployed admin (`0xb9326...9636`).
+
+---
+
+## 🧠 Local ZK Development (optional)
+
+```bash
+yarn workspace monorepo-ethers-contracts hardhat node
+yarn workspace monorepo-ethers-web-app dev
+```
+
+Use this only for circuit testing; production writes are on **Sepolia**.
+
+---
+
+## ✅ Status
+
+* [x] Wallet UX – Connect / Disconnect / Balance
+* [x] On-chain group creation + joining
+* [x] ZK gesture proofs (Groth16)
+* [x] Verified contracts
+* [x] Inclusive voting flow (end-to-end)
+
+---
+
+## 👮‍♂️ Demo Checklist for Judges
+
+1. Click **Connect Wallet** → choose MetaMask (Sepolia).
+2. Click **Create Group** → approve tx → Etherscan link shows.
+3. Click **Join Group** → approve tx → member appears.
+4. Perform a gesture → verify proof → vote recorded.
+5. Confirm on Sepolia explorer.
+
+---
+
+## 🏁 Tagline
+
+**“Your voice on-chain — even if it’s silent.”** 🦟
+
+---
+
+### ✅ Key Fixes Reflected Here
+
+* Removed all localhost RPC mentions (`127.0.0.1:8545`).
+* Removed server wallet instructions (`ETHEREUM_PRIVATE_KEY`).
+* Clarified that **all writes are now via MetaMask signer**.
+* Updated verified contract addresses.
+
+---
+
+## ⚙️ How It Works (Technical Overview)
+
+SignDAO bridges **AI gesture recognition** and **ZK-secure blockchain voting** in five coordinated layers:
+
+### 1. Gesture Capture & AI Recognition
+
+* The **frontend** or **Python FastAPI backend** captures webcam frames.
+* **MediaPipe** models classify each frame into a specific gesture label (e.g., YES, NO, ABSTAIN).
+* The AI inference output is converted into an encoded signal string (ASCII or base64).
+
+### 2. Signal Commitment & Identity Generation
+
+* Users create a **Semaphore identity commitment** locally in the browser.
+* This identity stays private — only its hash (the commitment) is stored on-chain in a Semaphore Group.
+* Each member’s commitment is added via `DaoActionsZK.joinGroup()` (MetaMask write on Sepolia).
+
+### 3. ZK Proof Generation (Groth16)
+
+* When a user performs a gesture vote, the gesture label becomes the `signal` input to a **Groth16 circuit**.
+* Using `snarkjs` + Semaphore circuit files, the app generates a **ZK proof** that:
+
+  * The voter belongs to a valid group (inclusion proof), and
+  * The same voter cannot double-vote (nullifier hash check).
+* No identity data or gesture content is leaked.
+
+### 4. On-chain Verification & DAO Logic
+
+* The ZK proof is verified on-chain by **SemaphoreVerifier.sol**.
+* Once verified, **DaoActionsZK.sol** records the anonymized vote result in its DAO state.
+* Each transaction is visible on Sepolia Etherscan but contains no personal info.
+
+### 5. Feedback & Transparency
+
+* The frontend shows live vote confirmation with a Sepolia Etherscan link.
+* Each successful tx updates the global group list and the user’s “last transaction” pill in the header.
+* All reads (vote count, group members, etc.) use `NEXT_PUBLIC_SEPOLIA_RPC` for speed and consistency.
+
+---
+
+**In essence:**
+
+> AI interprets the gesture → browser proves identity → ZK circuit hides the voter → MetaMask finalizes the vote.
+
+This chain of trust ensures a **private, accessible, and verifiable** democratic process — on-chain, for everyone.
