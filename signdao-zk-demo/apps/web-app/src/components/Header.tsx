@@ -1,14 +1,22 @@
 "use client"
 
 import Link from "next/link"
-import ConnectWalletButton from "@/components/ConnectWalletButton"
+import dynamic from "next/dynamic"
+import ClientOnly from "@/components/ClientOnly"
 import { useWalletAddress } from "@/lib/useWalletAddress"
+import { DAO_ADDR } from "@/lib/contracts"
+
+const ConnectWalletButton = dynamic(() => import("@/components/ConnectWalletButton"), {
+    ssr: false
+})
 
 const SEPOLIA_CHAIN_HEX = "0xaa36a7"
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 export default function Header() {
     const { chainId, lastTxHash, refresh } = useWalletAddress()
     const isWrongChain = chainId !== null && chainId !== 11155111
+
     const missingEnv: string[] = []
     if (!process.env.NEXT_PUBLIC_SEPOLIA_RPC) {
         missingEnv.push("NEXT_PUBLIC_SEPOLIA_RPC")
@@ -17,7 +25,9 @@ export default function Header() {
         missingEnv.push("NEXT_PUBLIC_DAO_ACTIONS_ADDR")
     }
     const showConfigWarning = process.env.NODE_ENV !== "production" && missingEnv.length > 0
-    const feedbackAddress = process.env.NEXT_PUBLIC_FEEDBACK_CONTRACT_ADDRESS
+
+    const daoAddress = DAO_ADDR
+    const showDaoLink = daoAddress !== ZERO_ADDRESS
 
     async function switchToSepolia() {
         try {
@@ -36,14 +46,14 @@ export default function Header() {
             <header className="header">
                 <div className="header-left" style={{ gap: "1rem" }}>
                     <Link href="/">SignDAO (ZK)</Link>
-                    {feedbackAddress && (
+                    {showDaoLink && (
                         <a
-                            href={`https://sepolia.etherscan.io/address/${feedbackAddress}`}
+                            href={`https://sepolia.etherscan.io/address/${daoAddress}`}
                             target="_blank"
                             rel="noreferrer noopener nofollow"
                             style={{ fontSize: "0.85rem", opacity: 0.8 }}
                         >
-                            Feedback Contract
+                            DaoActionsZK Contract
                         </a>
                     )}
                     <a
@@ -59,33 +69,39 @@ export default function Header() {
                         </svg>
                     </a>
                 </div>
-                <div className="header-right" style={{ gap: "0.75rem" }}>
-                    {lastTxHash && (
-                        <a
-                            href={`https://sepolia.etherscan.io/tx/${lastTxHash}`}
-                            target="_blank"
-                            rel="noreferrer noopener nofollow"
-                            className="last-tx-pill"
-                        >
-                            Last tx ↗
-                        </a>
-                    )}
-                    <ConnectWalletButton />
-                </div>
+                <ClientOnly>
+                    <div className="header-right" style={{ gap: "0.75rem" }}>
+                        {lastTxHash && (
+                            <a
+                                href={`https://sepolia.etherscan.io/tx/${lastTxHash}`}
+                                target="_blank"
+                                rel="noreferrer noopener nofollow"
+                                className="last-tx-pill"
+                            >
+                                Last tx
+                            </a>
+                        )}
+                        <ConnectWalletButton />
+                    </div>
+                </ClientOnly>
             </header>
-            {showConfigWarning && (
-                <div className="config-banner" role="alert">
-                    Missing env vars: {missingEnv.join(", ")}
-                </div>
-            )}
-            {isWrongChain && (
-                <div className="chain-banner" role="alert">
-                    <span>Connected to wrong network.</span>
-                    <button type="button" onClick={switchToSepolia}>
-                        Switch to Sepolia
-                    </button>
-                </div>
-            )}
+            <ClientOnly>
+                <>
+                    {showConfigWarning && (
+                        <div className="config-banner" role="alert">
+                            Missing env vars: {missingEnv.join(", ")}
+                        </div>
+                    )}
+                    {isWrongChain && (
+                        <div className="chain-banner" role="alert">
+                            <span>Connected to wrong network.</span>
+                            <button type="button" onClick={switchToSepolia}>
+                                Switch to Sepolia
+                            </button>
+                        </div>
+                    )}
+                </>
+            </ClientOnly>
         </>
     )
 }

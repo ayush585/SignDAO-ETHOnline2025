@@ -1,0 +1,49 @@
+[
+  {
+    "type": "event",
+    "name": "VoteAccepted",
+    "inputs": [
+      { "name": "merkleRoot", "type": "uint256", "indexed": false },
+      { "name": "nullifierHash", "type": "uint256", "indexed": false },
+      { "name": "signalField", "type": "uint256", "indexed": false },
+      { "name": "externalNullifier", "type": "uint256", "indexed": false }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "function",
+    "name": "createGroup",
+    "inputs": [
+      { "name": "groupId", "type": "uint256" },
+      { "name": "depth", "type": "uint8" },
+      { "name": "admin", "type": "address" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "joinGroup",
+    "inputs": [
+      { "name": "groupId", "type": "uint256" },
+      { "name": "identityCommitment", "type": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "submitVote",
+    "inputs": [
+      { "name": "a", "type": "uint256[2]" },
+      { "name": "b", "type": "uint256[2][2]" },
+      { "name": "c", "type": "uint256[2]" },
+      { "name": "merkleRoot", "type": "uint256" },
+      { "name": "nullifierHash", "type": "uint256" },
+      { "name": "signalField", "type": "uint256" },
+      { "name": "externalNullifier", "type": "uint256" }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  }
+]
