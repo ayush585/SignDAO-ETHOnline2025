@@ -9,6 +9,7 @@ import {
   assertDaoDeployed,
   getDaoWrite,
   getFeedbackWriteOrNull,
+  getGroupMerkleRoot,
   DAO_ADDR,
   FB_ADDR
 } from "@/lib/contracts";
@@ -37,13 +38,13 @@ type TxInfo = {
 };
 
 type VoteProofTuple = [
-  [string, string],
-  [[string, string], [string, string]],
-  [string, string],
-  string,
-  string,
-  string,
-  string
+  [bigint, bigint],
+  [[bigint, bigint], [bigint, bigint]],
+  [bigint, bigint],
+  bigint,
+  bigint,
+  bigint,
+  bigint
 ];
 
 function extractErrorMessage(error: unknown): string {
@@ -56,10 +57,10 @@ function extractErrorMessage(error: unknown): string {
   return "Transaction failed. Please try again.";
 }
 
-function hashToField(value: string | bigint): string {
+function hashToField(value: string | bigint): bigint {
   const bigintValue = typeof value === "bigint" ? value : BigInt(value);
   const hashed = keccak256(toBeHex(bigintValue, 32));
-  return (BigInt(hashed) >> 8n).toString();
+  return BigInt(hashed) >> 8n;
 }
 
 async function submitVoteTransaction(
@@ -90,6 +91,7 @@ export default function ProofsPage() {
   const { _identity } = useSemaphoreIdentity();
 
   const [isSubmittingFeedback, setSubmittingFeedback] = useState(false);
+  const [isSubmittingVote, setSubmittingVote] = useState(false);
   const [txInfo, setTxInfo] = useState<TxInfo | null>(null);
   const [gesture, setGesture] = useState<string>("");
   const [confidence, setConfidence] = useState<number | null>(null);
@@ -104,6 +106,7 @@ export default function ProofsPage() {
   const isCorrectChain = chainId === SEPOLIA_CHAIN_ID;
   const canTransact = isConnected && isCorrectChain;
   const groupId = process.env.NEXT_PUBLIC_GROUP_ID;
+  const groupIdBigInt = useMemo(() => (groupId ? BigInt(groupId) : null), [groupId]);
 
   const requestSepoliaSwitch = useCallback(async () => {
     try {
@@ -224,7 +227,7 @@ export default function ProofsPage() {
       setLog("No Semaphore members found for proof generation.");
       return;
     }
-    if (!groupId) {
+    if (!groupIdBigInt) {
       setLog("Missing NEXT_PUBLIC_GROUP_ID configuration.");
       return;
     }
@@ -249,7 +252,7 @@ export default function ProofsPage() {
         _identity,
         group,
         signal,
-        groupId
+        groupIdBigInt
       );
 
       const fbContract = await getFeedbackWriteOrNull();
@@ -277,7 +280,7 @@ export default function ProofsPage() {
     _identity,
     _users,
     addFeedback,
-    groupId,
+    groupIdBigInt,
     isConnected,
     isCorrectChain,
     refreshFeedback,
@@ -312,7 +315,7 @@ export default function ProofsPage() {
       return;
     }
 
-    if (!groupId) {
+    if (!groupIdBigInt) {
       setLog("Missing NEXT_PUBLIC_GROUP_ID configuration.");
       return;
     }
@@ -339,20 +342,28 @@ export default function ProofsPage() {
       try {
         setLog(`Detected ${gesture} gesture - generating ZK proof...`);
 
-        const proof = await generateProof(_identity, group, signal, groupId);
+        const proof = await generateProof(_identity, group, signal, groupIdBigInt);
         const unpacked = unpackGroth16Proof(proof.points);
+        const piA: [bigint, bigint] = [BigInt(unpacked.pi_a[0]), BigInt(unpacked.pi_a[1])];
+        const piB: [[bigint, bigint], [bigint, bigint]] = [
+          [BigInt(unpacked.pi_b[0][0]), BigInt(unpacked.pi_b[0][1])],
+          [BigInt(unpacked.pi_b[1][0]), BigInt(unpacked.pi_b[1][1])]
+        ];
+        const piC: [bigint, bigint] = [BigInt(unpacked.pi_c[0]), BigInt(unpacked.pi_c[1])];
+        const merkleRootOnChain = await getGroupMerkleRoot(groupIdBigInt);
+        const proofMerkleRoot = BigInt(proof.merkleTreeRoot);
+        if (merkleRootOnChain !== proofMerkleRoot) {
+          setLog("On-chain Merkle root mismatch. Refresh the group before voting.");
+          return;
+        }
         const signalField = hashToField((proof as any).message ?? signal);
-        const externalNullifier = hashToField((proof as any).scope ?? groupId);
-
+        const externalNullifier = hashToField((proof as any).scope ?? groupIdBigInt);
         const proofPayload: VoteProofTuple = [
-          [unpacked.pi_a[0].toString(), unpacked.pi_a[1].toString()],
-          [
-            [unpacked.pi_b[0][0].toString(), unpacked.pi_b[0][1].toString()],
-            [unpacked.pi_b[1][0].toString(), unpacked.pi_b[1][1].toString()]
-          ],
-          [unpacked.pi_c[0].toString(), unpacked.pi_c[1].toString()],
-          proof.merkleTreeRoot.toString(),
-          proof.nullifier.toString(),
+          piA,
+          piB,
+          piC,
+          merkleRootOnChain,
+          BigInt(proof.nullifier),
           signalField,
           externalNullifier
         ];
@@ -379,12 +390,117 @@ export default function ProofsPage() {
     gesture,
     _identity,
     _users,
-    groupId,
+    groupIdBigInt,
     isConnected,
     isCorrectChain,
     setLastTxHash,
     setLog
   ]);
+
+  const handleSubmitVote = useCallback(async () => {
+    if (isSubmittingVote) {
+      return;
+    }
+
+    if (!isConnected) {
+      setLog("Connect your wallet before voting.");
+      return;
+    }
+
+    if (!isCorrectChain) {
+      setLog("Switch MetaMask to Sepolia before voting.");
+      return;
+    }
+
+    if (!_identity) {
+      setLog("Semaphore identity not ready yet.");
+      return;
+    }
+
+    if (!_users || _users.length === 0) {
+      setLog("No Semaphore members found for proof generation.");
+      return;
+    }
+
+    if (!groupIdBigInt) {
+      setLog("Missing NEXT_PUBLIC_GROUP_ID configuration.");
+      return;
+    }
+
+    const signal = "1";
+    const group = new Group(_users);
+
+    setSubmittingVote(true);
+    setTxInfo(null);
+    setLog("Generating vote proof...");
+
+    try {
+      const proof = await generateProof(_identity, group, signal, groupIdBigInt);
+      const unpacked = unpackGroth16Proof(proof.points);
+      const piA: [bigint, bigint] = [BigInt(unpacked.pi_a[0]), BigInt(unpacked.pi_a[1])];
+      const piB: [[bigint, bigint], [bigint, bigint]] = [
+        [BigInt(unpacked.pi_b[0][0]), BigInt(unpacked.pi_b[0][1])],
+        [BigInt(unpacked.pi_b[1][0]), BigInt(unpacked.pi_b[1][1])]
+      ];
+      const piC: [bigint, bigint] = [BigInt(unpacked.pi_c[0]), BigInt(unpacked.pi_c[1])];
+      const merkleRootOnChain = await getGroupMerkleRoot(groupIdBigInt);
+      const proofMerkleRoot = BigInt(proof.merkleTreeRoot);
+      if (merkleRootOnChain !== proofMerkleRoot) {
+        setLog("On-chain Merkle root mismatch. Refresh the group before voting.");
+        return;
+      }
+      const signalField = hashToField((proof as any).message ?? signal);
+      const externalNullifier = hashToField((proof as any).scope ?? groupIdBigInt);
+      const proofPayload: VoteProofTuple = [
+        piA,
+        piB,
+        piC,
+        merkleRootOnChain,
+        BigInt(proof.nullifier),
+        signalField,
+        externalNullifier
+      ];
+
+      const hash = await submitVoteTransaction(proofPayload, setLog);
+      if (hash) {
+        setTxInfo({ hash, message: "Vote confirmed on Sepolia." });
+        setLastTxHash(hash);
+      }
+    } catch (voteError) {
+      console.error(voteError);
+      setLog(`Error submitting vote: ${extractErrorMessage(voteError)}`);
+    } finally {
+      setSubmittingVote(false);
+    }
+  }, [
+    _identity,
+    _users,
+    groupIdBigInt,
+    isConnected,
+    isCorrectChain,
+    isSubmittingVote,
+    setLastTxHash,
+    setLog
+  ]);
+
+  const voteDisabled =
+    isSubmittingVote ||
+    !canTransact ||
+    !_identity ||
+    !_users ||
+    _users.length === 0 ||
+    !groupIdBigInt;
+  const voteTooltip = !isConnected
+    ? "Connect wallet first"
+    : !isCorrectChain
+    ? "Switch to Sepolia"
+    : !_identity
+    ? "Semaphore identity not ready"
+    : !_users || _users.length === 0
+    ? "No Semaphore members found"
+    : !groupIdBigInt
+    ? "Configure NEXT_PUBLIC_GROUP_ID"
+    : "";
 
   const feedbackDisabled = !feedbackChecked || !feedbackReady;
   const feedbackTooltip = !feedbackChecked
@@ -429,14 +545,27 @@ export default function ProofsPage() {
           <h2>Gesture Vote</h2>
           <p>Gesture: {gesture ? gesture : "Waiting..."}</p>
           <p>Confidence: {confidence !== null ? confidence.toFixed(2) : "-"}</p>
-          {error && (
-            <p style={{ color: "red", fontSize: "0.85rem" }} role="alert">
-              {error}
-            </p>
-          )}
-        </section>
+        {error && (
+          <p style={{ color: "red", fontSize: "0.85rem" }} role="alert">
+            {error}
+          </p>
+        )}
+      </section>
 
-        <h2>Proofs</h2>
+      <div className="submit-vote-button">
+        <button
+          className="button"
+          onClick={handleSubmitVote}
+          disabled={voteDisabled}
+          title={voteTooltip}
+          type="button"
+        >
+          <span>Submit Vote</span>
+          {isSubmittingVote && <div className="loader"></div>}
+        </button>
+      </div>
+
+      <h2>Proofs</h2>
 
         <p>
           Semaphore members can anonymously{" "}
