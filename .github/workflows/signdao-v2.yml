@@ -1,0 +1,44 @@
+name: SignDAO V2 Verification
+
+on:
+  push:
+    branches:
+      - security/signdao-v2-hardening
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "signdao-zk-demo/**"
+      - "docs/SIGNDAO_V2_SECURITY.md"
+      - "README.md"
+      - ".github/workflows/signdao-v2.yml"
+
+jobs:
+  contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: signdao-zk-demo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Compile contracts
+        run: yarn workspace monorepo-ethers-contracts compile
+
+      - name: Run contract tests
+        run: yarn workspace monorepo-ethers-contracts test
