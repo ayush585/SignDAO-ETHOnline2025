@@ -35,6 +35,8 @@ jobs:
         run: corepack enable
 
       - name: Install dependencies
+        env:
+          YARN_ENABLE_HARDENED_MODE: "0"
         run: yarn install
 
       - name: Compile contracts
