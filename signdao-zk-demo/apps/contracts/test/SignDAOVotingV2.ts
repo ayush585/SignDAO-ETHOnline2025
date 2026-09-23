@@ -14,7 +14,7 @@ describe("SignDAOVotingV2", () => {
         const SemaphoreContract = semaphore;
 
         const Factory = await ethers.getContractFactory("SignDAOVotingV2");
-        const voting = await Factory.deploy(await SemaphoreContract.getAddress());
+        const voting = (await Factory.deploy(await SemaphoreContract.getAddress())) as any;
         await voting.waitForDeployment();
 
         const groupId = await voting.groupId();
@@ -221,9 +221,9 @@ describe("SignDAOVotingV2", () => {
         const { voting, group, alice, proposalId } = await loadFixture(deployFixture);
         const proof = await makeProof(voting, alice, group, proposalId, YES);
 
-        const malformed = {
+        const malformed: any = {
             ...proof,
-            points: [...proof.points] as bigint[]
+            points: [...proof.points]
         };
         malformed.points[0] = BigInt(malformed.points[0]) + 1n;
 
@@ -283,7 +283,7 @@ describe("SignDAOVotingV2", () => {
         } = await loadFixture(deployFixture);
 
         const Factory = await ethers.getContractFactory("SignDAOVotingV2");
-        const votingB = await Factory.deploy(await SemaphoreContract.getAddress());
+        const votingB = (await Factory.deploy(await SemaphoreContract.getAddress())) as any;
         await votingB.waitForDeployment();
 
         await votingB.addMember(alice.commitment);
