@@ -35,7 +35,7 @@ jobs:
         run: corepack enable
 
       - name: Install dependencies
-        run: yarn install --immutable
+        run: yarn install
 
       - name: Compile contracts
         run: yarn workspace monorepo-ethers-contracts compile
