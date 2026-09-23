@@ -127,7 +127,7 @@ describe("SignDAOVotingV2", () => {
 
         await expect(voting.connect(relayer).castVote(proposalId, YES, proof))
             .to.emit(voting, "VoteCast")
-            .withArgs(proposalId, YES, proof.nullifier, relayer.address);
+            .withArgs(proposalId, YES, BigInt(proof.nullifier), relayer.address);
     });
 
     it("rejects replaying the same proof/nullifier", async () => {
@@ -313,4 +313,54 @@ describe("SignDAOVotingV2", () => {
         const proposal = await voting.proposals(proposalId);
         expect(proposal.yesVotes + proposal.noVotes).to.equal(2n);
     });
+    it("rejects an invalid choice before consuming the proof", async () => {
+        const { voting, group, alice, proposalId } = await loadFixture(deployFixture);
+        const proof = await makeProof(voting, alice, group, proposalId, YES);
+
+        await expect(voting.castVote(proposalId, 0, proof))
+            .to.be.revertedWithCustomError(voting, "InvalidChoice");
+
+        await expect(voting.castVote(proposalId, YES, proof)).to.not.be.reverted;
+    });
+
+    it("accepts a proof generated against a recent previous group root", async () => {
+        const { voting, group, alice, proposalId } = await loadFixture(deployFixture);
+        const proofAtOldRoot = await makeProof(voting, alice, group, proposalId, YES);
+
+        const charlie = new Identity();
+        await voting.addMember(charlie.commitment);
+
+        await expect(
+            voting.castVote(proposalId, YES, proofAtOldRoot)
+        ).to.not.be.reverted;
+    });
+
+    it("rejects a proof after its previous group root expires", async () => {
+        const { voting, group, alice } = await loadFixture(deployFixture);
+        const now = await time.latest();
+
+        await voting.createProposal(
+            ethers.keccak256(ethers.toUtf8Bytes("Long proposal")),
+            now,
+            now + 7200
+        );
+
+        const proposalId = 2n;
+        const proofAtOldRoot = await makeProof(voting, alice, group, proposalId, YES);
+
+        const charlie = new Identity();
+        await voting.addMember(charlie.commitment);
+
+        // Semaphore v4.13.2 createGroup(address) uses a one-hour historical-root duration.
+        await time.increase(3601);
+
+        await expect(
+            voting.castVote(proposalId, YES, proofAtOldRoot)
+        ).to.be.reverted;
+
+        const proposal = await voting.proposals(proposalId);
+        expect(proposal.yesVotes).to.equal(0n);
+        expect(proposal.noVotes).to.equal(0n);
+    });
+
 });
