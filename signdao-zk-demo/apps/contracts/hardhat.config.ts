@@ -2,6 +2,8 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 import "@nomicfoundation/hardhat-toolbox";
+import "@semaphore-protocol/hardhat";
+import "./tasks/deploy";
 
 import { HardhatUserConfig } from "hardhat/config";
 
