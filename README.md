@@ -2,7 +2,7 @@
 
 SignDAO is an **ETHGlobal 2025 hackathon prototype** exploring an accessibility-focused voting flow that combines gesture recognition, Semaphore zero-knowledge membership proofs, Solidity, and a browser wallet.
 
-The original prototype remains in this repository for historical transparency. A separate **post-hackathon V2 hardening effort** is being developed alongside it rather than rewriting the original implementation.
+The original prototype remains in this repository for historical transparency, alongside a **post-hackathon V2 security-hardening pass** rather than rewriting the original implementation.
 
 ## What the prototype demonstrated
 
